@@ -1,0 +1,111 @@
+%YAML 1.2
+---
+# http://www.sublimetext.com/docs/syntax.html
+name: gscript
+file_extensions:
+  - gs2
+  - gscript
+  - gs
+  - gscript
+  - gscript2
+  - gscript2
+scope: source.gscript
+
+contexts:
+  main:
+    - include: sql-strings
+    - include: variables
+    - include: comments
+    - include: strings
+    - include: numbers
+    - include: keywords
+    - include: functions
+    - include: operators
+
+  comments:
+    - match: ^\s*#.*$
+      scope: comment.line.hash.gscript
+
+    - match: //.*$
+      scope: comment.line.double-slash.gscript
+
+    # Block comment - only match /* when preceded by whitespace or at line start
+    # This prevents "levels/*" from triggering block comments
+    - match: (?:^|\s)/\*
+      scope: punctuation.definition.comment.begin.gscript
+      push: block-comment
+
+  block-comment:
+    - meta_scope: comment.block.gscript
+    - match: \*/
+      scope: punctuation.definition.comment.end.gscript
+      pop: true
+    - match: ^\s*\*.*$
+      scope: comment.block.gscript.leading-asterisk
+
+  sql-strings:
+    - match: '"'
+      scope: punctuation.definition.string.begin.gscript
+      push: sql-string-body
+
+  sql-string-body:
+    - meta_scope: string.quoted.double.sql.gscript
+    - match: '"'
+      scope: punctuation.definition.string.end.gscript
+      pop: true
+    - match: \b(SELECT|INSERT|UPDATE|DELETE|CREATE|TABLE|FROM|WHERE|VALUES|SET|INTO|AND|OR|NOT|NULL|IS|AS|ON|JOIN|LEFT|RIGHT|INNER|OUTER|GROUP|BY|ORDER|LIMIT|OFFSET|DISTINCT|COUNT|AVG|SUM|MIN|MAX|PRIMARY|KEY|DEFAULT|INT|TEXT|NOT)\b
+      scope: keyword.other.sql.gscript
+    - match: \\.
+      scope: constant.character.escape.gscript
+
+  strings:
+    - match: '"'
+      scope: punctuation.definition.string.begin.gscript
+      push: string-body
+
+  string-body:
+    - meta_scope: string.quoted.double.gscript
+    - match: '"'
+      scope: punctuation.definition.string.end.gscript
+      pop: true
+    - match: \\.
+      scope: constant.character.escape.gscript
+
+  numbers:
+    - match: \b([0-9]+|0[xX][0-9a-fA-F]+)\b
+      scope: constant.numeric.gscript
+
+  variables:
+    - match: '\$[a-zA-Z_][a-zA-Z0-9_]*(?:::[a-zA-Z_][a-zA-Z0-9_]*)*'
+      scope: variable.parameter.gscript
+
+  keywords:
+    - match: \b(break|case|continue|default|do|else|elseif|for|if|in|return|switch|while|with)\b
+      scope: keyword.control.gscript
+
+    - match: \b(join|leave)\b
+      scope: storage.type.gscript
+
+    - match: \b(public|private|const|enum|function)\b
+      scope: storage.modifier.gscript
+
+    - match: \b(new|datablock)\b
+      scope: keyword.other.gscript
+
+    - match: \b(true|false|nil|null|NULL|pi|timevar2)\b
+      scope: constant.language.gscript
+
+    - match: \b(this|thiso|temp|server|serverr|client|clientr|player|name)\b
+      scope: variable.language.gscript
+
+  functions:
+    - match: \b([a-zA-Z_][a-zA-Z0-9_]*)\s*(?=\()
+      scope: entity.name.function.gscript
+
+  operators:
+    - match: '[-~^@/%|=+*!?&<>]'
+      scope: keyword.operator.gscript
+    - match: '\[|\]'
+      scope: keyword.operator.array.gscript
+    - match: '[{}();:,.]'
+      scope: punctuation.gscript

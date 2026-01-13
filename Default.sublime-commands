@@ -1,0 +1,6 @@
+[
+    {
+        "caption": "RC: Update LSP Definitions",
+        "command": "rc_update_lsp_definitions"
+    }
+]

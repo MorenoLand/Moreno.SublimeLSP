@@ -242,13 +242,15 @@ class GScriptLspListener(sublime_plugin.ViewEventListener):
       params_str = match.group(2).strip()
       params = [p.strip() for p in params_str.split(',') if p.strip()] if params_str else []
       func_scope = 'clientside' if (clientside_marker != -1 and match.start() > clientside_marker) else ('serverside' if clientside_marker != -1 else 'document')
+      line_num = content[:match.start()].count('\n')
       self.document_functions[func_name] = {
         'name': func_name,
         'params': params,
         'returns': 'void',
         'description': 'User-defined function in current script',
         'scope': func_scope,
-        'is_custom': True
+        'is_custom': True,
+        'line': line_num
       }
 
   @classmethod
@@ -426,6 +428,7 @@ class GScriptLspListener(sublime_plugin.ViewEventListener):
     return result
 
   def on_hover(self, point, hover_zone):
+    self.view.erase_regions("rc_hover_underline")
     if hover_zone != sublime.HOVER_TEXT:
       return
     if not self.view.match_selector(point, "source.gscript"):
@@ -534,6 +537,9 @@ class GScriptLspListener(sublime_plugin.ViewEventListener):
         break
     if info is None:
       return
+    word_region = sublime.Region(line_region.begin() + start, line_region.begin() + end)
+    self.view.add_regions("rc_hover_underline", [word_region], "entity.name.function", "",
+      sublime.DRAW_NO_FILL | sublime.DRAW_NO_OUTLINE | sublime.DRAW_SOLID_UNDERLINE)
     example = info.get('example', '')
     html = self._build_hover_html(info, word, example, point)
     if not isinstance(html, str) or not html.strip():
@@ -675,10 +681,60 @@ class GScriptLspListener(sublime_plugin.ViewEventListener):
     self.schedule_parse()
 
   def on_selection_modified_async(self):
+    if self.view.window() and self.view.window().active_panel():
+      return
     self.show_param_hint()
 
   def on_load(self):
     self.load_api_definitions()
+
+class RcGotoDefinitionCommand(sublime_plugin.TextCommand):
+  def run(self, edit):
+    point = self.view.sel()[0].begin()
+    line_region = self.view.line(point)
+    line_text = self.view.substr(line_region)
+    col = point - line_region.begin()
+    start, end = col, col
+    while start > 0 and (line_text[start - 1].isalnum() or line_text[start - 1] in '$_:'):
+      start -= 1
+    while end < len(line_text) and (line_text[end].isalnum() or line_text[end] in '$_:'):
+      end += 1
+    word = line_text[start:end].strip()
+    if not word:
+      return
+    listener = GScriptLspListener.for_view(self.view) if hasattr(GScriptLspListener, 'for_view') else None
+    doc_funcs = {}
+    for listener_inst in GScriptLspListener._instances if hasattr(GScriptLspListener, '_instances') else []:
+      if listener_inst.view.id() == self.view.id():
+        doc_funcs = listener_inst.document_functions
+        break
+    if not doc_funcs:
+      content = self.view.substr(sublime.Region(0, self.view.size()))
+      pattern = GScriptLspListener._FUNC_PATTERN
+      clientside_marker = content.find('//#CLIENTSIDE')
+      for match in pattern.finditer(content):
+        func_name = match.group(1)
+        line_num = content[:match.start()].count('\n')
+        doc_funcs[func_name] = {'line': line_num}
+    word_lower = word.lower()
+    for name, data in doc_funcs.items():
+      if name.lower() == word_lower and 'line' in data:
+        pt = self.view.text_point(data['line'], 0)
+        self.view.sel().clear()
+        self.view.sel().add(sublime.Region(pt))
+        self.view.show_at_center(pt)
+        line_reg = self.view.line(pt)
+        line_text = self.view.substr(line_reg)
+        m = GScriptLspListener._FUNC_PATTERN.search(line_text)
+        if m:
+          name_start = line_reg.begin() + m.start(1)
+          name_end = line_reg.begin() + m.end(1)
+          dest_region = sublime.Region(name_start, name_end)
+          self.view.add_regions("rc_goto_underline", [dest_region], "entity.name.function", "",
+            sublime.DRAW_NO_FILL | sublime.DRAW_NO_OUTLINE | sublime.DRAW_SOLID_UNDERLINE)
+          sublime.set_timeout(lambda: self.view.erase_regions("rc_goto_underline"), 1500)
+        return
+    sublime.status_message("No definition found for '{}'".format(word))
 
 class RcUpdateLspDefinitionsCommand(sublime_plugin.WindowCommand):
   def run(self):
